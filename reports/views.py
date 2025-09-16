@@ -3,6 +3,12 @@ from django.http import FileResponse
 from .utils import generate_report_card
 from backend.supabase_client import supabase
 from datetime import datetime
+import uuid
+from supabase import create_client
+from django.conf import settings
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 
 # --- STUDENTS ---
 def students_list(request):
@@ -128,3 +134,144 @@ def report_card_pdf(request, student_id):
     )
 
     return FileResponse(buffer, as_attachment=True, filename=f"report_card_{student_id}_eduvista.pdf")
+
+supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+
+
+@api_view(["POST"])
+def supabase_login_api(request):
+    email = request.data.get("email")
+    password = request.data.get("password")
+
+    try:
+        user = supabase.auth.sign_in_with_password({"email": email, "password": password})
+
+        if user and user.user:
+            user_id = user.user.id
+
+            teacher = supabase.table("Teacher").select("*").eq("user_id", user_id).execute()
+            teacher_data = teacher.data[0] if teacher.data else None
+
+            return Response({
+                "message": "Login successful",
+                "user_id": user_id,
+                "email": email,
+                "teacher": teacher_data
+            })
+
+        return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+def supabase_signup_api(request):
+    email = request.data.get("email")
+    password = request.data.get("password")
+    teacher_id = request.data.get("teacher_id", "").strip()
+
+    try:
+        # Step 1: Sign up user
+        user_response = supabase.auth.sign_up({
+            "email": email,
+            "password": password,
+        })
+
+        user = user_response.user
+        session = user_response.session
+
+        if session is None:
+            return Response({
+                "message": "Please check your email to confirm your account before logging in."
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Step 2: Set session for further auth-required actions
+        supabase.auth.set_session(session.access_token, session.refresh_token)
+
+        user_id = user.id
+
+        # Step 3: Check if teacher exists and is unlinked
+        existing = supabase.table("Teacher").select("user_id").eq("teacher_id", teacher_id).execute()
+
+        if not existing.data:
+            return Response({"error": "Teacher not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if existing.data[0]["user_id"] is not None:
+            return Response({"error": "This teacher is already linked to a user."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 4: Link user_id to teacher
+        update_response = supabase.table("Teacher").update({"user_id": user_id}).eq("teacher_id", teacher_id).execute()
+
+        if update_response.error:
+            return Response({"error": f"Failed to link teacher: {update_response.error.message}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            "message": "Signup and teacher linking successful",
+            "user_id": user_id,
+            "email": email
+        })
+
+    except Exception as e:
+        print("Signup error:", e)
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+def home_api(request):
+    user_id = request.query_params.get("user_id")
+
+    if not user_id:
+        return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    teacher = None
+    teacher_subject_info = []
+    timetable = []
+
+    try:
+        # Fetch teacher by user_id
+        response = (
+            supabase.table("Teacher")
+            .select("*")
+            .eq("user_id", str(user_id).strip())
+            .execute()
+        )
+
+        if response.data:
+            teacher = response.data[0]
+            teacher_id = str(teacher.get("teacher_id")).strip()
+        else:
+            return Response({"message": "No teacher found for this user_id"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"error": f"Error fetching teacher: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    try:
+        # Fetch subjects
+        subject_resp = supabase.rpc("get_teacher_subjects", {"teacher_id_input": teacher_id}).execute()
+        teacher_subject_info = subject_resp.data if subject_resp else []
+
+    except Exception as e:
+        return Response({"error": f"Error fetching subject details: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    try:
+        # Fetch timetable
+        timetable_resp = supabase.rpc("get_teacher_timetable", {"p_teacher_id": teacher_id}).execute()
+        timetable = timetable_resp.data if timetable_resp else []
+
+    except Exception as e:
+        return Response({"error": f"Error fetching timetable: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "teacher": teacher,
+        "teacher_subject_info": teacher_subject_info,
+        "timetable": timetable
+    })
+
+
+@api_view(["POST"])
+def logout_api(request):
+    request.session.flush()
+    return Response({"message": "Logged out successfully"})
+
+
