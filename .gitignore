@@ -11,8 +11,7 @@ media/
 staticfiles/
 
 # Virtual environment
-venv/
-ENV/
+
 .env
 
 # IDE
