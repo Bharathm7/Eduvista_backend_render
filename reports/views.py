@@ -148,15 +148,26 @@ def supabase_login_api(request):
 
         if user and user.user:
             user_id = user.user.id
-
+            print(user_id)
             teacher = supabase.table("Teacher").select("*").eq("user_id", user_id).execute()
             teacher_data = teacher.data[0] if teacher.data else None
+            print(teacher_data)
+            
+
+            classes = supabase.table("Teacher_subject_class").select("*").eq("teacher_id", teacher_data['teacher_id']).execute()
+            teacher = supabase.table("Teacher").select("*").eq("teacher_id", teacher_data['teacher_id']).execute()
+            #print(class_details.data)
+            # {"email": "kritichopra@gmail.com", "password": "password"}
+
+             # = supabase.query(query).execute()  # or supabase.sql(query).execute() depending on library version
+
 
             return Response({
                 "message": "Login successful",
                 "user_id": user_id,
                 "email": email,
-                "teacher": teacher_data
+                "teacher": teacher_data,
+                "class_info":classes.data
             })
 
         return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
