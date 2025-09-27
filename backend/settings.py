@@ -49,7 +49,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     os.getenv("CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
-    "https://eduvista-frontend-ukqp.vercel.app/"
+    "https://eduvista-frontend-ukqp.vercel.app"
 ]
 
 ROOT_URLCONF = "backend.urls"
