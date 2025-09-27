@@ -20,4 +20,4 @@ services:
       - key: SUPABASE_KEY
         fromSecret: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dHFpbXp4eWZzZWRvenNlcXh0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Njk2NjYzNSwiZXhwIjoyMDcyNTQyNjM1fQ.AQjnD_miVhCQUsdTpYgJXcQLN5bRwFioDt3CU-M_FCI"
       - key: CORS_ALLOWED_ORIGIN
-        value: "https://eduvista-frontend-ukqp.vercel.app/" # Add your frontend Vercel URL for production
+        value: "https://eduvista-frontend-ukqp.vercel.app" # Add your frontend Vercel URL for production
