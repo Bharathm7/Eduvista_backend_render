@@ -2,17 +2,24 @@ services:
   - type: web
     name: teacher-dashboard-backend
     env: python
-    region: oregon               # Change region if you prefer
-    plan: free                   # Free plan
+    region: oregon       # Change region if needed
+    plan: free           # Free tier
     buildCommand: |
-      pip install -r requirements.txt
+      python -m pip install --upgrade pip setuptools wheel
+      pip install --no-cache-dir -r requirements.txt
       python manage.py migrate
       python manage.py collectstatic --noinput
     startCommand: gunicorn your_project_name.wsgi
     envVars:
       - key: SECRET_KEY
-        fromSecret: DJANGO_SECRET_KEY   # Set this in Render secrets
+        fromSecret: DJANGO_SECRET_KEY
       - key: DEBUG
         value: "False"
       - key: DATABASE_URL
-        fromSecret: DATABASE_URL        # Optional, if using Postgres
+        fromSecret: DATABASE_URL       # Optional if using Postgres
+      - key: SUPABASE_URL
+        fromSecret: SUPABASE_URL
+      - key: SUPABASE_KEY
+        fromSecret: SUPABASE_KEY
+      - key: CORS_ALLOWED_ORIGIN
+        value: "http://localhost:3000" # Add your frontend Vercel URL for production
