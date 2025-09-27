@@ -9,7 +9,7 @@ services:
       pip install --no-cache-dir -r requirements.txt
       python manage.py migrate
       python manage.py collectstatic --noinput
-    startCommand: gunicorn your_project_name.wsgi
+    startCommand: gunicorn Eduvista_backend_render.wsgi
     envVars:
       - key: SECRET_KEY
         fromSecret: "06boh)f%lm7sp%qe!o9=^f6ga*-4$oyxxqqd&vg&k(3qgnn$gp"
