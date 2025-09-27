@@ -12,14 +12,12 @@ services:
     startCommand: gunicorn your_project_name.wsgi
     envVars:
       - key: SECRET_KEY
-        fromSecret: DJANGO_SECRET_KEY
+        fromSecret: "06boh)f%lm7sp%qe!o9=^f6ga*-4$oyxxqqd&vg&k(3qgnn$gp"
       - key: DEBUG
-        value: "False"
-      - key: DATABASE_URL
-        fromSecret: DATABASE_URL       # Optional if using Postgres
+        value: "False"     # Optional if using Postgres
       - key: SUPABASE_URL
-        fromSecret: SUPABASE_URL
+        fromSecret: "https://wztqimzxyfsedozseqxt.supabase.co"
       - key: SUPABASE_KEY
-        fromSecret: SUPABASE_KEY
+        fromSecret: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dHFpbXp4eWZzZWRvenNlcXh0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Njk2NjYzNSwiZXhwIjoyMDcyNTQyNjM1fQ.AQjnD_miVhCQUsdTpYgJXcQLN5bRwFioDt3CU-M_FCI"
       - key: CORS_ALLOWED_ORIGIN
-        value: "http://localhost:3000" # Add your frontend Vercel URL for production
+        value: "https://eduvista-frontend-ukqp.vercel.app/" # Add your frontend Vercel URL for production
