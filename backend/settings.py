@@ -13,13 +13,6 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key")
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = ["*"]  # allow all for now, restrict later in production
-import os
-from supabase import create_client
-
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wztqimzxyfsedozseqxt.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dHFpbXp4eWZzZWRvenNlcXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjY2MzUsImV4cCI6MjA3MjU0MjYzNX0.e2vhKUhifM8OHs-2BMjvMJmyAXfwuz1DHso5JbzkaQQ")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from pathlib import Path
 
@@ -56,6 +49,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     os.getenv("CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
+    "https://eduvista-frontend-ukqp.vercel.app/"
 ]
 
 ROOT_URLCONF = "backend.urls"
