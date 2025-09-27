@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: teacher-dashboard-backend
+    env: python
+    region: oregon               # Change region if you prefer
+    plan: free                   # Free plan
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py migrate
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn your_project_name.wsgi
+    envVars:
+      - key: SECRET_KEY
+        fromSecret: DJANGO_SECRET_KEY   # Set this in Render secrets
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromSecret: DATABASE_URL        # Optional, if using Postgres
