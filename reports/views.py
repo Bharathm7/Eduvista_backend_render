@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from dotenv import load_dotenv
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import os
 
 load_dotenv()
@@ -47,38 +48,47 @@ def exams_list(request):
     # response = supabase.table("marks_details").select("*").eq("subject_id", subject_id).gte("student_id", student_id).lt("student_id", student_id + 40).execute()
     # return JsonResponse(response.data, safe=False)
 
-# @api_view(["GET"])
-# def marks_list(request, subject_id, class_id):
-    try:
-        teachsub = supabase.table("Teacher_subject_class") \
-            .select("*") \
-            .eq("subject_id", subject_id) \
-            .eq("class_id", class_id) \
-            .execute()
-        if not teachsub.data:
-            return JsonResponse({"error": "This subject is not taught in the selected class."}, status=404)
-        students = supabase.table("student_details") \
-            .select("student_id") \
-            .eq("class_id", class_id) \
-            .execute()
+# # @api_view(["GET"])
+# # def marks_list(request, subject_id, class_id):
+#     try:
+#         teachsub = supabase.table("Teacher_subject_class") \
+#             .select("*") \
+#             .eq("subject_id", subject_id) \
+#             .eq("class_id", class_id) \
+#             .execute()
+#         if not teachsub.data:
+#             return JsonResponse({"error": "This subject is not taught in the selected class."}, status=404)
+#         students = supabase.table("student_details") \
+#             .select("student_id") \
+#             .eq("class_id", class_id) \
+#             .execute()
 
-        student_ids = [s["student_id"] for s in students.data]
+#         student_ids = [s["student_id"] for s in students.data]
 
-        if not student_ids:
-            return JsonResponse({"error": "No students found in this class."}, status=404)
-        marks = supabase.table("marks_details") \
-            .select("*") \
-            .eq("subject_id", subject_id) \
-            .in_("student_id", student_ids) \
-            .execute()
+#         if not student_ids:
+#             return JsonResponse({"error": "No students found in this class."}, status=404)
+#         marks = supabase.table("marks_details") \
+#             .select("*") \
+#             .eq("subject_id", subject_id) \
+#             .in_("student_id", student_ids) \
+#             .execute()
 
-        print(len(marks.data))  # For debugging
-        return JsonResponse(marks.data, safe=False)
+#         print(len(marks.data))  # For debugging
+#         return JsonResponse(marks.data, safe=False)
 
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+#     except Exception as e:
+#         return JsonResponse({"error": str(e)}, status=500)
 
 # --- MARKS ---
+import logging
+from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
 @api_view(["GET"])
 @csrf_exempt
 def marks_list(request, subject_id, class_id, exam_type):
@@ -102,15 +112,18 @@ def marks_list(request, subject_id, class_id, exam_type):
         if not student_ids:
             return JsonResponse({"error": "No students found in this class."}, status=404)
 
-        # 3. Get exam IDs matching exam_type
+        #3. Get exam IDs matching exam_type
         exam_response = supabase.table("exam_details") \
             .select("exam_id") \
             .eq("class_id", class_id) \
+            .eq("exam_type",exam_type)\
             .execute()
 
         exam_ids = [e["exam_id"] for e in exam_response.data]
+        print(len(exam_ids))
+
         if not exam_ids:
-            return JsonResponse({"error": "No exams found for this exam type.", "exam_response": exam_response}, status=404)
+            return JsonResponse({"error": "No exams found for this exam type."}, status=404)
 
         # 4. Get marks filtered by subject, students, and exam_ids
         marks_response = supabase.table("marks_details") \
@@ -119,11 +132,13 @@ def marks_list(request, subject_id, class_id, exam_type):
             .in_("student_id", student_ids) \
             .in_("exam_id", exam_ids) \
             .execute()
+        print("the total length is",len(marks_response.data))
 
         return JsonResponse(marks_response.data, safe=False)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
 
 @api_view(["POST"])
 @csrf_exempt
@@ -341,7 +356,15 @@ def mark_attendance(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
-@csrf_exempt
+def classes(request,teacher):
+    result = supabase.table("Teacher_subject_class").select("*").eq("teacher_id", teacher).execute()
+    # Extract class IDs
+    class_ids = [row["class_id"] for row in result.data]
+    # Fetch class details for these class IDs
+    class_details = supabase.table("class_details").select("*").in_("class_id", class_ids).execute()
+
+    return JsonResponse(class_details.data, safe=False)
+
 def report_card(request, student_id):
     # 1. Get student info
     student = supabase.table("student_details").select("*").eq("student_id", student_id).execute()
@@ -374,15 +397,13 @@ def report_card(request, student_id):
         })
 
     return JsonResponse(report, safe=False)
-
-@csrf_exempt
 def report_card_pdf(request, student_id):
     # 1. Student
     student = supabase.table("student_details").select("*").eq("student_id", student_id).execute().data[0]
-
+    print(student)
     # 2. Class Info
     class_info = supabase.table("class_details").select("*").eq("class_id", student["class_id"]).execute().data[0]
-    # print(class_info)
+
     # 3. Marks
     marks = supabase.table("marks_details").select("*").eq("student_id", student_id).execute().data
 
@@ -394,17 +415,14 @@ def report_card_pdf(request, student_id):
     academic_year = exams[0]["academic_year"] if exams else "N/A"
 
     # 5. Subjects
-    
-    # subjects = supabase.table("subject_details").select("*").execute().data
-    # subject_map = {s["subject_id"]: s for s in subjects}
-
-    classSubjects = supabase.table("Teacher_subject_class").select("*").eq("class_id", class_info["class_id"]).execute()
-    subjectIds = [row["subject_id"] for row in classSubjects.data]
-    subjects = supabase.table("subject_details").select("*").eq("subject_id", subjectIds).execute().data
+    subjects = supabase.table("subject_details").select("*").execute().data
     subject_map = {s["subject_id"]: s for s in subjects}
 
     # 6. Attendance (for that academic year)
-    attendance_records = supabase.table("attendance_details").select("*").eq("student_id", student_id).execute().data
+    attendance_records = supabase.table("attendance_details") \
+        .select("*") \
+        .eq("student_id", student_id) \
+        .execute().data
 
     if academic_year != "N/A" and "-" in academic_year:
         start_year, end_year = academic_year.split("-")
@@ -451,7 +469,186 @@ def report_card_pdf(request, student_id):
 
     return FileResponse(buffer, as_attachment=True, filename=f"report_card_{student_id}_eduvista.pdf")
 
+# supabase = create_client(supabase_client.SUPABASE_URL, supabase_client.SUPABASE_KEY)
 
+#from django.http import JsonResponse
+def calculate_remarks(avg_percent):
+    if avg_percent is None:
+        return "No data"
+    elif avg_percent >= 90:
+        return "Excellent performance! Keep it up."
+    elif avg_percent >= 75:
+        return "Good job! Aim for even higher."
+    elif avg_percent >= 60:
+        return "Satisfactory, but there is room for improvement."
+    elif avg_percent >= 50:
+        return "Needs improvement, focus more on this subject."
+    else:
+        return "Poor performance, additional help is recommended."
+
+def calculate_trend(midterm_percent, final_percent):
+    if midterm_percent is None or final_percent is None:
+        return "No sufficient data"
+    if final_percent > midterm_percent:
+        return "Improving"
+    elif final_percent < midterm_percent:
+        return "Declining"
+    else:
+        return "Stable"
+def calculate_grade(midterm_percent, final_percent):
+    if midterm_percent and final_percent >= 90:
+        return "A+"
+    elif midterm_percent and final_percent >= 80:
+        return "A"
+    elif midterm_percent and final_percent >= 70:
+        return "B"
+    elif midterm_percent and final_percent >= 60:
+        return "C"
+    elif midterm_percent and final_percent >= 50:
+        return "D"
+    else:
+        return "F"
+def get_attendance_records_for_student(student_id):
+    response = supabase.table("attendance_details").select("*").eq("student_id", student_id).execute()
+    
+    return response.data 
+
+def get_student_analytics(student_id):
+    result = []
+    # Fetch only the target student
+    student_data = supabase.table("student_details").select("*").eq("student_id", student_id).execute().data
+    if not student_data:
+        return None  # or raise an exception
+
+    student = student_data[0]
+    student_class_id = student["class_id"]
+    student_fname = student["first_name"]
+    student_lname = student["last_name"]
+
+    # Fetch relevant data
+    tsc = supabase.table("Teacher_subject_class").select("*").eq("class_id", student_class_id).execute().data
+    subjects = supabase.table("subject_details").select("*").execute().data
+    marks = supabase.table("marks_details").select("*").eq("student_id", student_id).execute().data
+    exams = supabase.table("exam_details").select("*").execute().data
+
+    # Create maps for fast lookup
+    subject_map = {s["subject_id"]: s for s in subjects}
+    exam_map = {e["exam_id"]: e for e in exams}
+    subject_marks_map = {}
+
+    subject_midterm_percent = {}
+    subject_final_percent = {}
+
+    for m in marks:
+        sid = m["subject_id"]
+        exam_type = exam_map.get(m["exam_id"], {}).get("exam_type", "Unknown").lower()
+        obtained = m["marks"]
+
+        if exam_type in ["midterm", "mid term"]:
+            percent = (obtained / 50) * 100
+            max_marks = 50
+            subject_midterm_percent[sid] = percent
+        elif exam_type in ["final", "final exam"]:
+            percent = (obtained / 100) * 100
+            max_marks = 100
+            subject_final_percent[sid] = percent
+        else:
+            continue
+
+        if sid not in subject_marks_map:
+            subject_marks_map[sid] = []
+
+        subject_marks_map[sid].append({
+            "exam_id": m["exam_id"],
+            "exam_type": exam_type.title(),
+            "marks": obtained,
+            "max_marks": max_marks,
+            "percent": round(percent, 2),
+        })
+
+    strengths = []
+    weaknesses = []
+
+    for mapping in tsc:
+        subject_id = mapping["subject_id"]
+        s = subject_map.get(subject_id)
+        if not s:
+            continue
+
+        marks_list = subject_marks_map.get(subject_id, [])
+        if not marks_list:
+            avg_percent = 0
+        else:
+            avg_percent = sum(m['percent'] for m in marks_list) / len(marks_list)
+
+        avg_percent = round(avg_percent, 2)
+        remarks = calculate_remarks(avg_percent)
+
+        midterm_percent = subject_midterm_percent.get(subject_id)
+        final_percent = subject_final_percent.get(subject_id)
+        progress_trend = calculate_trend(midterm_percent, final_percent)
+
+        if avg_percent >= 85:
+            strengths.append(s["subject_name"])
+        elif avg_percent <= 60:
+            weaknesses.append(s["subject_name"])
+
+        for mark in marks_list:
+            mark["grade"] = calculate_grade(midterm_percent or 0, final_percent or 0) if midterm_percent and final_percent else "No sufficient data"
+
+        result.append({
+            "student_id": student_id,
+            "student_name": f"{student_fname} {student_lname}",
+            "subject_id": subject_id,
+            "subject_name": s["subject_name"],
+            "average_percent": avg_percent,
+            "remarks": remarks,
+            "progress_trend": progress_trend,
+            "marks": marks_list
+        })
+
+    analytics = {
+        "student_name": f"{student_fname} {student_lname}",
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "subjects": result,
+    }
+
+    return analytics
+
+
+def final_reports(request, student_id):
+    analytics = get_student_analytics(student_id)
+    if analytics is None:
+        return JsonResponse({"error": "Student not found"}, status=404)
+    return JsonResponse(analytics, safe=False)
+
+
+def gen_pdf(request, student_id):
+    analytics = get_student_analytics(student_id)
+    if analytics is None or not analytics.get("subjects"):
+        return HttpResponse("Student not found or no data", status=404)
+
+    attendance_records = get_attendance_records_for_student(student_id)
+    if attendance_records is None:
+        return HttpResponse("Attendance records not found", status=404)
+
+    subjects_data = analytics["subjects"]
+
+    # You may want to call analyze_attendance if you want to log or use its output,
+    # but your generate_report_card already calculates attendance info internally.
+
+    pdf_buffer = generate_report_card(
+        student_name=analytics["student_name"],
+        subjects_data=subjects_data,
+        strengths=analytics["strengths"],
+        weaknesses=analytics["weaknesses"],
+        attendance_records=attendance_records
+    )
+
+    response = HttpResponse(pdf_buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{analytics["student_name"].replace(" ", "_")}_Report.pdf"'
+    return response
 
 
 @api_view(["POST"])
