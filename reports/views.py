@@ -13,6 +13,8 @@ from django.views.decorators.csrf import csrf_exempt
 from dotenv import load_dotenv
 from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import os
+from .utils import generate_attendance_pdf
+
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -649,6 +651,39 @@ def gen_pdf(request, student_id):
     response = HttpResponse(pdf_buffer, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{analytics["student_name"].replace(" ", "_")}_Report.pdf"'
     return response
+
+
+def behavioural_analysis(request, student_id):
+    analytics = get_student_analytics(student_id)
+    if analytics is None:
+        return HttpResponse("Student not found", status=404)
+
+    all_records = get_attendance_records_for_student(student_id)
+    if not all_records:
+        return HttpResponse("Attendance records not found", status=404)
+
+    # Filter records for current month
+    target_year = 2024
+    target_month = 10  # October
+
+    attendance_records = [
+        rec for rec in all_records
+        if datetime.strptime(rec['date'], '%Y-%m-%d').month == target_month
+        and datetime.strptime(rec['date'], '%Y-%m-%d').year == target_year
+    ]
+
+
+    if not attendance_records:
+        return HttpResponse("No attendance records for this month", status=404)
+
+    #summary = all_records(attendance_records)
+    # Generate PDF with filtered records
+    pdf_buffer = generate_attendance_pdf(analytics['student_name'],all_records)
+
+    response = HttpResponse(pdf_buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{analytics["student_name"].replace(" ","-")}_attendance_report.pdf"'
+    return response
+
 
 
 @api_view(["POST"])
