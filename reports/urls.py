@@ -21,6 +21,6 @@ urlpatterns = [
     path("signup/", views.supabase_signup_api, name="api_signup"),
     path("home/", views.home_api, name="api_home"),
     path("logout/", views.logout_api, name="api_logout"),
-    
+    path("behaviour/<int:student_id>",views.behavioural_analysis),  
 
 ]

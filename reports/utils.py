@@ -7,6 +7,223 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")  # off-screen rendering
 
+from io import BytesIO
+from datetime import datetime, timedelta
+from collections import defaultdict
+import matplotlib.pyplot as plt
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
+
+PAGE_WIDTH, PAGE_HEIGHT = A4
+BOTTOM_MARGIN = 2*cm
+
+
+
+
+# ---------- Helpers ----------
+def parse_date(date_str):
+    return datetime.strptime(date_str, "%Y-%m-%d")
+
+
+def generate_attendance_remark(attendance_percentage, longest_absent_streak):
+    if attendance_percentage >= 95:
+        remark = "Excellent attendance! Your child is consistently present and engaged in class."
+    elif 90 <= attendance_percentage < 95:
+        remark = "Good attendance! Your child attends regularly, keep encouraging them to maintain this consistency."
+    elif 75 <= attendance_percentage < 90:
+        remark = "Fair attendance. Encourage your child to attend regularly for better progress."
+    else:
+        remark = "Attendance is low. We recommend working together to improve regularity and participation."
+
+    if longest_absent_streak >= 5:
+        remark += " There were a few long absence periods; regular attendance helps in learning continuity."
+    return remark
+
+
+def get_attendance_summary(attendance_records):
+    if not attendance_records:
+        return {}
+
+    attendance_records.sort(key=lambda x: parse_date(x['date']))
+    total_days = len(attendance_records)
+    total_present = sum(1 for r in attendance_records if r['status'].lower() == 'present')
+    total_absent = total_days - total_present
+    attendance_percentage = (total_present / total_days) * 100 if total_days else 0
+
+    weekly_summary = defaultdict(lambda: {'present': 0, 'absent': 0, 'percentage': 0})
+    for rec in attendance_records:
+        date_obj = parse_date(rec['date'])
+        week_start = date_obj - timedelta(days=date_obj.weekday())
+        week_key = week_start.strftime("%Y-%m-%d")
+        if rec['status'].lower() == 'present':
+            weekly_summary[week_key]['present'] += 1
+        else:
+            weekly_summary[week_key]['absent'] += 1
+
+    for week, data in weekly_summary.items():
+        total = data['present'] + data['absent']
+        data['percentage'] = (data['present'] / total) * 100 if total else 0
+
+    longest_streak = 0
+    current_streak = 0
+    for rec in attendance_records:
+        if rec['status'].lower() != 'present':
+            current_streak += 1
+            longest_streak = max(longest_streak, current_streak)
+        else:
+            current_streak = 0
+
+    remark = generate_attendance_remark(attendance_percentage, longest_streak)
+
+    return {
+        'total_days': total_days,
+        'total_present': total_present,
+        'total_absent': total_absent,
+        'attendance_percentage': round(attendance_percentage, 2),
+        'weekly_summary': dict(weekly_summary),
+        'remark': remark
+    }
+
+
+def create_attendance_pie_chart(attendance_records):
+    present_count = sum(1 for r in attendance_records if r['status'].lower() == 'present')
+    absent_count = sum(1 for r in attendance_records if r['status'].lower() == 'absent')
+    total = present_count + absent_count
+
+    if total == 0:
+        return None
+
+    plt.style.use("ggplot")
+    fig, ax = plt.subplots(figsize=(5, 5), dpi=300)
+    ax.pie(
+        [present_count, absent_count],
+        labels=["Present", "Absent"],
+        autopct='%1.1f%%',
+        startangle=90,
+        colors=['#4CAF50', '#E74C3C'],
+        textprops={'fontsize': 12}
+    )
+    ax.set_title("Attendance Distribution", fontsize=14, fontweight='bold')
+
+    buf = BytesIO()
+    plt.savefig(buf, format='PNG', bbox_inches='tight')
+    plt.close()
+    buf.seek(0)
+    return buf
+
+
+# ---------- PDF Generator ----------
+def generate_attendance_pdf(student_name, attendance_records, month=10, year=2024):
+    # Filter records for selected month & year
+    month_records = [
+        r for r in attendance_records
+        if parse_date(r['date']).month == month and parse_date(r['date']).year == year
+    ]
+
+    summary = get_attendance_summary(month_records)
+    remark = summary.get('remark', "No attendance data available for this month.")
+    month_name = datetime(year, month, 1).strftime("%B %Y")
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    PAGE_WIDTH, PAGE_HEIGHT = A4
+    BOTTOM_MARGIN = 2 * cm
+    y = PAGE_HEIGHT - 2 * cm
+
+    # Title
+    c.setFont("Helvetica-Bold", 20)
+    c.drawString(2 * cm, y, f"Attendance Report - {month_name}")
+    y -= 1.2 * cm
+
+    c.setFont("Helvetica", 14)
+    c.drawString(2 * cm, y, f"Student: {student_name}")
+    y -= 1.2 * cm
+
+    # Attendance Summary
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(2 * cm, y, "Summary:")
+    y -= 1 * cm
+    c.setFont("Helvetica", 12)
+    c.drawString(2 * cm, y, f"Total Days: {summary['total_days']}")
+    y -= 0.6 * cm
+    c.drawString(2 * cm, y, f"Days Present: {summary['total_present']}")
+    y -= 0.6 * cm
+    c.drawString(2 * cm, y, f"Days Absent: {summary['total_absent']}")
+    y -= 0.6 * cm
+    c.drawString(2 * cm, y, f"Attendance Percentage: {summary['attendance_percentage']}%")
+    y -= 1.5 * cm
+
+    # Weekly Breakdown Table
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(2 * cm, y, "Weekly Summary:")
+    y -= 1 * cm
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2 * cm, y, "Week Start")
+    c.drawString(8 * cm, y, "Present")
+    c.drawString(11 * cm, y, "Absent")
+    c.drawString(14 * cm, y, "%")
+    y -= 0.6 * cm
+    c.setFont("Helvetica", 12)
+
+    for week, data in summary['weekly_summary'].items():
+        if y < BOTTOM_MARGIN + 3 * cm:
+            c.showPage()
+            y = PAGE_HEIGHT - 2 * cm
+        c.drawString(2 * cm, y, week)
+        c.drawString(8 * cm, y, str(data['present']))
+        c.drawString(11 * cm, y, str(data['absent']))
+        c.drawString(14 * cm, y, f"{data['percentage']:.1f}%")
+        y -= 0.5 * cm
+
+    y -= 1.5 * cm
+
+    # Pie Chart
+    chart_buffer = create_attendance_pie_chart(month_records)
+    if chart_buffer:
+        img = ImageReader(chart_buffer)
+        chart_size = 8 * cm
+        if y < BOTTOM_MARGIN + chart_size:
+            c.showPage()
+            y = PAGE_HEIGHT - 2 * cm
+        c.drawImage(img, 5 * cm, y - chart_size, width=chart_size, height=chart_size)
+        y -= chart_size + 1 * cm
+
+    # Remark
+    if y < BOTTOM_MARGIN + 2 * cm:
+        c.showPage()
+        y = PAGE_HEIGHT - 2 * cm
+
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(2 * cm, y, "Teacher's Note:")
+    y -= 0.8 * cm
+    c.setFont("Helvetica-Oblique", 12)
+    remark_lines = []
+    line = ""
+    for word in remark.split():
+        if c.stringWidth(line + " " + word, "Helvetica-Oblique", 12) < (PAGE_WIDTH - 4 * cm):
+            line += " " + word
+        else:
+            remark_lines.append(line.strip())
+            line = word
+    remark_lines.append(line.strip())
+    for l in remark_lines:
+        if y < BOTTOM_MARGIN:
+            c.showPage()
+            y = PAGE_HEIGHT - 2 * cm
+        c.drawString(2 * cm, y, l)
+        y -= 0.6 * cm
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
 
 def generate_bar_chart(subjects_data):
     subjects = [s["subject_name"] for s in subjects_data]
