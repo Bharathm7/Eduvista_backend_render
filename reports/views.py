@@ -328,7 +328,7 @@ def calculate_remarks(avg_percent):
         return "No data"
     elif avg_percent >= 90:
         return "Excellent performance! Keep it up."
-    elif avg_percent >= 75:
+    elif avg_percent >= 70:
         return "Good job! Aim for even higher."
     elif avg_percent >= 60:
         return "Satisfactory, but there is room for improvement."
@@ -346,16 +346,16 @@ def calculate_trend(midterm_percent, final_percent,unit_percent):
         return "Declining"
     else:
         return "Stable"
-def calculate_grade(midterm_percent, final_percent):
-    if midterm_percent and final_percent >= 90:
+def calculate_grade(avg_percent):
+    if avg_percent >= 90:
         return "A+"
-    elif midterm_percent and final_percent >= 80:
+    elif avg_percent >= 80:
         return "A"
-    elif midterm_percent and final_percent >= 70:
+    elif avg_percent >= 70:
         return "B"
-    elif midterm_percent and final_percent >= 60:
+    elif avg_percent >= 60:
         return "C"
-    elif midterm_percent and final_percent >= 50:
+    elif avg_percent >= 50:
         return "D"
     else:
         return "F"
@@ -456,6 +456,7 @@ def get_student_analytics(student_id):
             continue
 
         marks_list = subject_marks_map.get(subject_id, [])
+        print(f"DEBUGGING {s['subject_name']}: {marks_list}")
         avg_percent = round(sum(m['percent'] for m in marks_list) / len(marks_list), 2) if marks_list else 0.0
         remarks = calculate_remarks(avg_percent)
 
@@ -472,8 +473,7 @@ def get_student_analytics(student_id):
             print(weaknesses)
 
         for mark in marks_list:
-            mark["grade"] = calculate_grade(
-                midterm_percent or 0, final_percent or 0
+            mark["grade"] = calculate_grade(avg_percent or 0
             ) if midterm_percent is not None and final_percent is not None else "No sufficient data"
 
         result.append({

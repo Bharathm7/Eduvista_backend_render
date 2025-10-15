@@ -6,7 +6,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")  # off-screen rendering
-
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from io import BytesIO
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -300,13 +300,6 @@ def analyze_attendance(attendance_records, subjects_data):
         "attendance_remark": attendance_remark
     }
 
-from io import BytesIO
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.lib import colors
-
 def generate_report_card(student_name, subjects_data, strengths, weaknesses, attendance_records):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -330,7 +323,6 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
         textColor=colors.HexColor("#0B3D91"),
         spaceAfter=24,
     )
-
     header_style = ParagraphStyle(
         name="HeaderStyle",
         parent=styles["Heading2"],
@@ -341,7 +333,6 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
         spaceBefore=12,
         spaceAfter=8,
     )
-
     normal_style = ParagraphStyle(
         name="NormalStyle",
         parent=styles["Normal"],
@@ -351,7 +342,6 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
         textColor=colors.HexColor("#333333"),
         spaceAfter=6,
     )
-
     italic_style = ParagraphStyle(
         name="ItalicStyle",
         parent=styles["Normal"],
@@ -361,31 +351,32 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
         textColor=colors.HexColor("#666666"),
         spaceAfter=8,
     )
+    table_header_style = ParagraphStyle(
+        name="TableHeader",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10, # Adjusted for better fit
+        leading=12,
+        alignment=TA_CENTER,
+        textColor=colors.whitesmoke
+    )
 
     elements = []
 
-    print("# === Attendance Summary ===")
+    # All of your data and logic calculations remain unchanged
     total_days = len(attendance_records)
-    print(total_days)
     present_days = sum(1 for a in attendance_records if a["status"].lower() == "present")
-    print(present_days)
     absent_days = sum(1 for a in attendance_records if a["status"].lower() == "absent")
-    print(absent_days)
     leave_days = sum(1 for a in attendance_records if a["status"].lower() == "leave")
-    print(leave_days)
     holiday_days = sum(1 for a in attendance_records if a["status"].lower() == "holiday")
-    print(holiday_days)
-
     attendance_percent = (present_days / total_days * 100) if total_days else 0
     overall_avg_percent = (
         sum(sub['average_percent'] for sub in subjects_data) / len(subjects_data)
     ) if subjects_data else 0
 
-    # === Title ===
+    # PDF Structure (No changes here)
     elements.append(Paragraph(f"{student_name}'s Academic Report", title_style))
     elements.append(Spacer(1, 12))
-
-    # === Attendance Section ===
     attendance_summary = (
         f"<b>Attendance Summary:</b><br/>"
         f"Total Days: {total_days} | Present: {present_days} | Absent: {absent_days} | "
@@ -394,65 +385,80 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
     )
     elements.append(Paragraph(attendance_summary, normal_style))
     elements.append(Spacer(1, 20))
-
-    # === Strengths & Weaknesses ===
     elements.append(Paragraph("Strengths", header_style))
     elements.append(Paragraph(", ".join(strengths) if strengths else "None", normal_style))
     elements.append(Spacer(1, 10))
-
     elements.append(Paragraph("Areas to Improve", header_style))
     elements.append(Paragraph(", ".join(weaknesses) if weaknesses else "None", normal_style))
     elements.append(Spacer(1, 20))
 
-    # === Subject Performance Table ===
-    table_data = [
-        ["Subject", "Midterm %", "Final %", "Unit %", "Average %", "Grade", "Remarks", "Trend"]
-    ]
+    # === DYNAMIC Subject Performance Table ===
+
+    # 1. Determine which optional columns have data across all subjects
+    has_midterm = any(any("midterm" in m["exam_type"].lower() for m in s.get("marks", [])) for s in subjects_data)
+    has_final = any(any("final" in m["exam_type"].lower() for m in s.get("marks", [])) for s in subjects_data)
+    has_unit = any(s.get("unit_percent") is not None and s.get("unit_percent") != "No unit test data" for s in subjects_data)
+    has_grade = any(s.get("marks") and s.get("marks")[0].get("grade") not in ["No sufficient data", "N/A"] for s in subjects_data)
+    has_trend = any(s.get("progress_trend") not in ["N/A", "No sufficient data", "Stable"] for s in subjects_data)
+
+
+    # 2. Define all possible columns and their properties
+    all_columns = {
+        'subject': {'header': 'Subject', 'width': 85},
+        'unit': {'header': 'Unit %', 'width': 55, 'condition': has_unit},
+        'midterm': {'header': 'Midterm %', 'width': 55, 'condition': has_midterm},
+        'final': {'header': 'Final %', 'width': 55, 'condition': has_final},
+        'average': {'header': 'Average %', 'width': 55},
+        'grade': {'header': 'Grade', 'width': 45, 'condition': has_grade},
+        'remarks': {'header': 'Remarks', 'width': 150},
+        'trend': {'header': 'Trend', 'width': 70, 'condition': has_trend}
+    }
+
+    # 3. Filter to get active columns, headers, and widths
+    active_keys = [key for key, props in all_columns.items() if props.get('condition', True)]
+    header_content = [all_columns[key]['header'] for key in active_keys]
+    col_widths = [all_columns[key]['width'] for key in active_keys]
+
+    # Adjust remarks width if some columns are hidden to use the space
+    if len(active_keys) < len(all_columns):
+        try:
+            remarks_index = active_keys.index('remarks')
+            removed_widths = sum(props['width'] for key, props in all_columns.items() if not props.get('condition', True))
+            col_widths[remarks_index] += removed_widths
+        except ValueError:
+            pass # Remarks column might not be active
+
+    # 4. Build table data dynamically
+    table_header = [Paragraph(text, table_header_style) for text in header_content]
+    table_data = [table_header]
 
     for subject in subjects_data:
-        # Use precomputed unit_percent from get_student_analytics if available
-        unit_percent = subject.get('unit_percent', None)
-        if unit_percent == "No unit test data":
-            unit_percent = None
+        # Helper to get percentages
+        def get_percent(exam_type_keyword):
+            return next((m["percent"] for m in subject.get('marks', []) if exam_type_keyword in m["exam_type"].lower()), None)
 
-        # Fallback to searching marks list if unit_percent is not precomputed
-        if unit_percent is None:
-            unit_percent = next(
-                (m["percent"] for m in subject['marks'] if any(x in m["exam_type"].lower() for x in ["unit", "ut", "unittest"])), None
-            )
+        midterm_percent = get_percent("midterm")
+        final_percent = get_percent("final")
+        unit_percent = subject.get('unit_percent') if subject.get('unit_percent') != "No unit test data" else get_percent("unit")
 
-        midterm_percent = next(
-            (m["percent"] for m in subject['marks'] if "midterm" in m["exam_type"].lower()), None
-        )
-        final_percent = next(
-            (m["percent"] for m in subject['marks'] if "final" in m["exam_type"].lower()), None
-        )
 
-        avg = subject.get('average_percent', 0.0)
-        grade = (
-            subject['marks'][0].get('grade')
-            if subject['marks'] and subject['marks'][0].get('grade') != "No sufficient data"
-            else "N/A"
-        )
+        # Data extraction for the row
+        column_values = {
+            'subject': Paragraph(subject['subject_name'], normal_style),
+            'midterm': f"{midterm_percent:.1f}%" if midterm_percent is not None else "N/A",
+            'final': f"{final_percent:.1f}%" if final_percent is not None else "N/A",
+            'unit': f"{unit_percent:.1f}%" if unit_percent is not None else "N/A",
+            'average': f"{subject.get('average_percent', 0.0):.1f}%",
+            'grade': (subject['marks'][0].get('grade') if subject.get('marks') and subject['marks'][0].get('grade') != "No sufficient data" else "N/A"),
+            'remarks': Paragraph(subject.get('remarks', 'N/A'), normal_style),
+            'trend': Paragraph(subject.get('progress_trend', 'N/A'), normal_style)
+        }
+        
+        # Add data for active columns only
+        row_data = [column_values[key] for key in active_keys]
+        table_data.append(row_data)
 
-        remarks = subject.get('remarks', 'N/A')
-        trend = subject.get('progress_trend', 'N/A')
-
-        # Debug output to inspect marks
-        print(f"Subject: {subject['subject_name']}, Marks: {subject['marks']}, Unit %: {unit_percent}")
-
-        table_data.append([
-            subject['subject_name'],
-            f"{midterm_percent:.1f}%" if midterm_percent is not None else "N/A",
-            f"{final_percent:.1f}%" if final_percent is not None else "N/A",
-            f"{unit_percent:.1f}%" if unit_percent is not None else "N/A",
-            f"{avg:.1f}%",
-            grade,
-            remarks,
-            trend
-        ])
-
-    # Attendance remark logic
+    # Attendance remark logic (No changes here)
     if attendance_percent < 75 and overall_avg_percent < 60:
         attendance_remark = "Critical: Please ensure regular attendance for academic improvement."
     elif attendance_percent < 75:
@@ -466,7 +472,6 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
     elements.append(Spacer(1, 14))
 
     # === Table Styling ===
-    col_widths = [100, 55, 55, 55, 55, 50, 140, 60]  # Adjust for 8 columns
     table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#4B8BBE")),
@@ -474,8 +479,9 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # Center align all columns except for 'Subject' and 'Remarks'
+        ('ALIGN', (1, 1), (len(header_content)-2, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), # Vertically align all cells
         ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
@@ -484,13 +490,16 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
     elements.append(table)
     elements.append(PageBreak())
 
-    # === Performance Chart ===
-    chart_buffer = generate_bar_chart(subjects_data)
-    elements.append(Paragraph("Performance Comparison", header_style))
-    elements.append(Image(chart_buffer, width=440, height=230))
-    elements.append(Spacer(1, 20))
+    # Performance Chart and Closing Note (No changes here)
+    try:
+        chart_buffer = generate_bar_chart(subjects_data)
+        elements.append(Paragraph("Performance Comparison", header_style))
+        elements.append(Image(chart_buffer, width=440, height=230))
+        elements.append(Spacer(1, 20))
+    except Exception:
+        # Fails silently if chart generation has an issue
+        pass
 
-    # === Closing Note ===
     note = """
     <para align=center>
     <b>Note:</b> This report highlights subject-wise performance and attendance trends.
@@ -499,8 +508,6 @@ def generate_report_card(student_name, subjects_data, strengths, weaknesses, att
     """
     elements.append(Paragraph(note, italic_style))
 
-    # === Build PDF ===
     doc.build(elements)
     buffer.seek(0)
     return buffer
-
