@@ -5,10 +5,8 @@ urlpatterns = [
     path("students/", views.students_list),
     path("teachers/", views.teachers_list),
     path("exams/", views.exams_list),
-    # path("marks/<str:subject_id>/<int:student_id>", views.marks_list),
     path("marks/<str:subject_id>/<int:class_id>/<str:exam_type>", views.marks_list),
     path("grades/<str:teacher_id>/<str:subject_id>/<int:class_id>/<str:exam_type>", views.grades_list),
-    # path("grades/<str:teacher_id>/<int:class_id>/<str:exam_type>", views.grades_list),
     path("marks_update/", views.marks_update),
     path("classes/<str:teacher_id>/<str:subject_id>", views.class_list),
     path("subjects/<str:teacher_id>/", views.subject_list),
@@ -19,8 +17,7 @@ urlpatterns = [
     path("gen/<int:student_id>",views.gen_pdf),
     path("login/", views.supabase_login_api, name="api_login"),
     path("signup/", views.supabase_signup_api, name="api_signup"),
-    path("home/", views.home_api, name="api_home"),
+    path("home/<str:user_id>", views.home_api, name="api_home"),
     path("logout/", views.logout_api, name="api_logout"),
     path("behaviour/<int:student_id>",views.behavioural_analysis),  
-
 ]
