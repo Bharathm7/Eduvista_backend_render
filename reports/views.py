@@ -15,18 +15,11 @@ from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import os
 from .utils import generate_attendance_pdf
 import logging
-from twilio.rest import Client
-
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL,SUPABASE_KEY)
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 
 # --- STUDENTS ------------------------------------------------------
@@ -526,68 +519,68 @@ def final_reports(request, student_id):
     return JsonResponse(analytics, safe=False)
 
 
-# def gen_pdf(request, student_id):
-#     """
-#     Generates a student's report card PDF, uploads it to Supabase Storage,
-#     saves metadata in report_card_files table, and returns a public preview URL.
-#     """
+def gen_pdf(request, student_id):
+    """
+    Generates a student's report card PDF, uploads it to Supabase Storage,
+    saves metadata in report_card_files table, and returns a public preview URL.
+    """
 
-#     # --- Step 1: Fetch analytics and attendance ---
-#     analytics = get_student_analytics(student_id)
-#     if analytics is None or not analytics.get("subjects"):
-#         return HttpResponse("Student not found or no data", status=404)
+    # --- Step 1: Fetch analytics and attendance ---
+    analytics = get_student_analytics(student_id)
+    if analytics is None or not analytics.get("subjects"):
+        return HttpResponse("Student not found or no data", status=404)
 
-#     attendance_records = get_attendance_records_for_student(student_id)
-#     if attendance_records is None:
-#         return HttpResponse("Attendance records not found", status=404)
+    attendance_records = get_attendance_records_for_student(student_id)
+    if attendance_records is None:
+        return HttpResponse("Attendance records not found", status=404)
 
-#     # --- Step 2: Generate PDF in memory ---
-#     pdf_buffer = generate_report_card(
-#         student_name=analytics["student_name"],
-#         subjects_data=analytics["subjects"],
-#         strengths=analytics["strengths"],
-#         weaknesses=analytics["weaknesses"],
-#         attendance_records=attendance_records
-#     )
+    # --- Step 2: Generate PDF in memory ---
+    pdf_buffer = generate_report_card(
+        student_name=analytics["student_name"],
+        subjects_data=analytics["subjects"],
+        strengths=analytics["strengths"],
+        weaknesses=analytics["weaknesses"],
+        attendance_records=attendance_records
+    )
 
-#     # --- Step 3: Prepare PDF file for upload ---
-#     file_bytes = pdf_buffer.getvalue()
-#     file_name = f"report_card_{student_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-#     storage_path = f"report_cards/{file_name}"
+    # --- Step 3: Prepare PDF file for upload ---
+    file_bytes = pdf_buffer.getvalue()
+    file_name = f"report_card_{student_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    storage_path = f"report_cards/{file_name}"
 
-#     # --- Step 4: Upload PDF to Supabase Storage ---
-#     try:
-#         upload_response = supabase.storage.from_("report_cards").upload(
-#             storage_path,
-#             file_bytes,
-#             {"content-type": "application/pdf"}
-#         )
-#     except Exception as e:
-#         return JsonResponse({"error": f"Failed to upload PDF: {str(e)}"}, status=500)
+    # --- Step 4: Upload PDF to Supabase Storage ---
+    try:
+        upload_response = supabase.storage.from_("report_cards").upload(
+            storage_path,
+            file_bytes,
+            {"content-type": "application/pdf"}
+        )
+    except Exception as e:
+        return JsonResponse({"error": f"Failed to upload PDF: {str(e)}"}, status=500)
 
-#     # --- Step 5: Get public preview URL ---
-#     public_url = supabase.storage.from_("report_cards").get_public_url(storage_path)
+    # --- Step 5: Get public preview URL ---
+    public_url = supabase.storage.from_("report_cards").get_public_url(storage_path)
 
-#     # --- Step 6: Save metadata in report_card_files table ---
-#     teacher_id = "T001"
+    # --- Step 6: Save metadata in report_card_files table ---
+    teacher_id = "T001"
 
-#     try:
-#         supabase.table("report_card_files").insert({
-#             "student_id": student_id,
-#             "teacher_id": teacher_id,
-#             "file_path": storage_path,
-#             "file_url": public_url,
-#             "created_at": datetime.now().isoformat()
-#         }).execute()
-#     except Exception as e:
-#         return JsonResponse({"error": f"Failed to save file metadata: {str(e)}"}, status=500)
+    try:
+        supabase.table("report_card_files").insert({
+            "student_id": student_id,
+            "teacher_id": teacher_id,
+            "file_path": storage_path,
+            "file_url": public_url,
+            "created_at": datetime.now().isoformat()
+        }).execute()
+    except Exception as e:
+        return JsonResponse({"error": f"Failed to save file metadata: {str(e)}"}, status=500)
 
-#     # --- Step 7: Return success response ---
-#     return JsonResponse({
-#         "message": "Report card generated, uploaded to Supabase successfully",
-#         "student_name": analytics["student_name"],
-#         "preview_url": public_url
-#     })
+    # --- Step 7: Return success response ---
+    return JsonResponse({
+        "message": "Report card generated, uploaded to Supabase successfully",
+        "student_name": analytics["student_name"],
+        "preview_url": public_url
+    })
 
 
 def behavioural_analysis(request, student_id):
@@ -891,205 +884,6 @@ def exam_management(request):
 def logout_api(request):
     request.session.flush()
     return Response({"message": "Logged out successfully"})
-
-def send_whatsapp_message(student_name, preview_url):
-    account_sid = os.getenv("TWILIO_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    from_whatsapp_number = "whatsapp:+14155238886"  # Twilio sandbox number
-    to_whatsapp_number = "whatsapp:+916364706757"   # your verified number
-
-    client = Client(account_sid, auth_token)
-    message = client.messages.create(
-        body=f"📄 Report Card for {student_name} is ready!\n\nPreview: {preview_url}",
-        from_=from_whatsapp_number,
-        to=to_whatsapp_number
-    )
-    print("WhatsApp message SID:", message.sid)
-
-
-def gen_pdf(request, student_id):
-    """
-    Generates a student's report card PDF, uploads it to Supabase Storage,
-    saves metadata in report_card_files table, and returns a public preview URL.
-    """
-
-    # --- Step 1: Fetch analytics and attendance ---
-    analytics = get_student_analytics(student_id)
-    if analytics is None or not analytics.get("subjects"):
-        return HttpResponse("Student not found or no data", status=404)
-
-    attendance_records = get_attendance_records_for_student(student_id)
-    if attendance_records is None:
-        return HttpResponse("Attendance records not found", status=404)
-
-    # --- Step 2: Generate PDF in memory ---
-    pdf_buffer = generate_report_card(
-        student_name=analytics["student_name"],
-        subjects_data=analytics["subjects"],
-        strengths=analytics["strengths"],
-        weaknesses=analytics["weaknesses"],
-        attendance_records=attendance_records
-    )
-
-    # --- Step 3: Prepare PDF file for upload ---
-    file_bytes = pdf_buffer.getvalue()
-    file_name = f"report_card_{student_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-    storage_path = f"report_cards/{file_name}"
-
-    # --- Step 4: Upload PDF to Supabase Storage ---
-    try:
-        upload_response = supabase.storage.from_("report_cards").upload(
-            storage_path,
-            file_bytes,
-            {"content-type": "application/pdf"}
-        )
-    except Exception as e:
-        return JsonResponse({"error": f"Failed to upload PDF: {str(e)}"}, status=500)
-
-    # --- Step 5: Get public preview URL ---
-    public_url = supabase.storage.from_("report_cards").get_public_url(storage_path)
-
-    # --- Step 6: Save metadata in report_card_files table ---
-    teacher_id = "T001"
-    student = supabase.table("student_details").select("*").eq("student_id", student_id).execute().data[0]
-    class_info = supabase.table("class_details").select("*").eq("class_id", student["class_id"]).execute().data[0]
-
-    try:
-        supabase.table("report_card_files").insert({
-            "student_id": student_id,
-            "teacher_id": teacher_id,
-            "file_path": storage_path,
-            "file_url": public_url,
-            "created_at": datetime.now().isoformat()
-        }).execute()
-    except Exception as e:
-        return JsonResponse({"error": f"Failed to save file metadata: {str(e)}"}, status=500)
-    
-    # --- Step 7: Notify via WhatsApp ---
-    try:
-    #  Get parent phone (fallback to your number for testing)
-        parent_phone = student.get("parent_contact", None)
-        if not parent_phone:
-            parent_phone = "+916364706757"  # fallback for testing
-
-    #  Compose message
-        msg_body = (
-            f"📄 Report Card Ready!\n\n"
-            f"Student: {student['first_name']} {student['last_name']}\n"
-            f"Class: {class_info['class_name']}\n"
-            f"View/Download: {public_url}\n\n"
-            f"- EduVista School"
-        )
-
-    #  Send WhatsApp message via Twilio
-        message = twilio_client.messages.create(
-            from_=TWILIO_WHATSAPP_NUMBER,
-            to=f"whatsapp:{parent_phone}",
-            body=msg_body
-        )
-
-        print("✅ WhatsApp message sent! SID:", message.sid)
-
-    except Exception as e:
-        import traceback
-        print("❌ WhatsApp send error:", e)
-        traceback.print_exc()
-
-
-    # --- Step 8: Return preview link ---
-    return JsonResponse({
-        "message": "Report card uploaded and WhatsApp notification sent successfully",
-        "preview_url": public_url
-        })
-
-# --- parent dashboard-------------------------
-
-@api_view(["POST"])
-@csrf_exempt
-def parent_login_api(request):
-    """
-    Parent login API: verifies Supabase auth user and fetches linked student details.
-    """
-    email = request.data.get("email")
-    password = request.data.get("password")
-
-    try:
-        # Step 1: Authenticate with Supabase
-        user = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        if not user or not user.user:
-            return Response({"error": "Invalid email or password"}, status=401)
-
-        user_id = user.user.id
-        session = user.session
-
-        # ✅ Step 2: Fallback — try by email if user_id is missing in table
-        if not parent_response.data:
-            parent_response = supabase.table("Parent").select("*").eq("email", email).execute()
-
-        # ✅ Step 3: Handle not found
-        if not parent_response.data:
-            return Response({"error": "Parent record not found"}, status=404)
-
-        parent = parent_resp.data[0]
-        parent_id = parent["parent_id"]
-
-        # Step 3: Fetch all students linked to this parent
-        student_resp = supabase.table("student_details").select("*").eq("parent_id", parent_id).execute()
-        students = student_resp.data if student_resp.data else []
-
-        return Response({
-            "message": "Parent login successful",
-            "parent": parent,
-            "students": students,
-            "access_token": session.access_token,
-            "refresh_token": session.refresh_token,
-            "expires_in": session.expires_in
-        })
-
-    except Exception as e:
-        print("Parent login error:", e)
-        return Response({"error": str(e)}, status=500)
-    
-    #parent-marks view-----------------------------
-    
-@api_view(["GET"])
-@csrf_exempt
-def parent_dashboard_api(request, parent_id):
-    """
-    Returns performance summary for all students under a parent.
-    """
-    try:
-        # Step 1: Get parent info
-        parent_resp = supabase.table("parent_details").select("*").eq("parent_id", parent_id).execute()
-        if not parent_resp.data:
-            return Response({"error": "Parent not found"}, status=404)
-
-        # Step 2: Fetch all students of that parent
-        student_resp = supabase.table("student_details").select("*").eq("parent_id", parent_id).execute()
-        if not student_resp.data:
-            return Response({"error": "No students linked to this parent"}, status=404)
-
-        dashboard_data = []
-        for student in student_resp.data:
-            student_id = student["student_id"]
-
-            attendance = get_attendance_records_for_student(student_id)
-            analytics = get_student_analytics(student_id)
-
-            dashboard_data.append({
-                "student": student,
-                "attendance_records": attendance,
-                "analytics": analytics
-            })
-
-        return Response({
-            "parent_id": parent_id,
-            "students_summary": dashboard_data
-        })
-
-    except Exception as e:
-        print("Parent dashboard error:", e)
-        return Response({"error": str(e)}, status=500)
 
 
 # --- STUDENT FINANCIALS ------------------------------------------------------
