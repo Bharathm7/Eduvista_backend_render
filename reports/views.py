@@ -311,6 +311,8 @@ def mark_attendance(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
 #--class-and-teacher-realtion---
 def classes(request,teacher):
     result = supabase.table("Teacher_subject_class").select("*").eq("teacher_id", teacher).execute()
@@ -756,6 +758,119 @@ def home_api(request,user_id):
         "teacher_subject_info": teacher_subject_info,
         "timetable": timetable
     })
+
+#------------------------ADMIN----------------------------
+@api_view(["POST"])
+@csrf_exempt
+def update_students(request):
+    try:
+        data = request.data
+        student_id = data.get("student_id")
+        first_name = data.get("first_name")
+        last_name  = data.get("last_name")
+        DOB        = data.get("DOB")
+        class_id   = data.get("class_id")
+        parent_id  = data.get("parent_id")
+        gender     = data.get("gender")
+        address    = data.get("address")
+
+        if not all ([student_id,first_name,last_name,DOB,class_id,parent_id,gender,address]):
+            return Response({"error": "Missing one or more required fields."}, status=400)
+
+        response = supabase.table("student_details").upsert({
+                "student_id": student_id,
+                "first_name": first_name,
+                "last_name": last_name,
+                "DOB": DOB,
+                "class_id": class_id,
+                "parent_id": parent_id,
+                "gender": gender,
+                "address": address,
+            }).execute()
+
+        if response.data:
+            return Response({"message": "Data has been updated successfully", "data": response.data})
+        else:
+            return Response({"message": "There was an issue inserting/updating the data"}, status=500)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(["post"])
+def update_teacher(request):
+    try:
+        data = request.data
+        print("-----------------------------payload-----------------------------------")
+        print("available data",data)
+        teacher_id = data.get("teacher_id")
+        first_name = data.get("first_name")
+        last_name  = data.get("last_name")
+        designation = data.get("designation")
+        education  = data.get("education")
+        phone      = data.get("phone")
+        salary     = data.get("salary")
+        address    = data.get("address")
+        gender     = data.get("gender")
+        my_class   = data.get("my_class")
+
+        print("Field values:", teacher_id, first_name, last_name, designation, education, phone, salary, address, gender, my_class)
+
+
+        if not all ([teacher_id,first_name,last_name,designation,education,phone,salary,address,gender,my_class]):
+            return Response({"error": "Missing one or more required fields."},status=400)
+
+        response = supabase.table("Teacher").upsert({
+            "teacher_id": teacher_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "designation": designation,
+            "education": education,
+            "ph.": phone,
+            "salary": salary,
+            "address": address,
+            "gender": gender,
+            "my_class": my_class
+            }).execute()
+
+        if response.data:
+            return Response({"message": "Data has been updated successfully", "data": response.data})
+        else:
+            return Response({"message": "There was an issue inserting/updating the data"}, status=500)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+def exam_management(request):
+    try:
+        data = request.data 
+        exam_id = data.get("exam_id")
+        academic_year = data.get("academic_year")
+        exam_type = data.get("exam_type")
+        class_id = data.get("class_id")
+        subject_id = data.get("subject_id")
+        exam_date = data.get("exam_date")
+
+        if not all ([exam_id,academic_year,exam_type,class_id,subject_id,exam_date]):
+            return Response({"error": "Missing one or more fields."},status=400)
+
+        response = supabase.table("exam_details").upsert({
+            "exam_id": exam_id,
+            "academic_year":academic_year,
+            "exam_type":exam_type,
+            "class_id":class_id,
+            "subject_id":subject_id,
+            "exam_date":exam_date
+            }).execute()
+        
+        if reponse.data:
+            return Response({"message": "Data has been updated successfully", "data": response.data})
+        else:
+            return Response({"message": "there was an issue intesering/updating the data"},status=500)
+    except Exception as e:
+        return Response({"error": str(e)},status=500)
 
 
 @api_view(["POST"])
