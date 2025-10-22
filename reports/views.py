@@ -1024,7 +1024,7 @@ def parent_login_api(request):
 
         # ✅ Step 2: Fallback — try by email if user_id is missing in table
         if not parent_response.data:
-            parent_response = supabase.table("Parent").select("*").eq("email", email).execute()
+            parent_response = supabase.table("parent_details").select("*").eq("email", email).execute()
 
         # ✅ Step 3: Handle not found
         if not parent_response.data:
