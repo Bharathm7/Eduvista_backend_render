@@ -1030,7 +1030,7 @@ def parent_login_api(request):
         if not parent_response.data:
             return Response({"error": "Parent record not found"}, status=404)
 
-        parent = parent_resp.data[0]
+        parent = parent_response.data[0]
         parent_id = parent["parent_id"]
 
         # Step 3: Fetch all students linked to this parent
