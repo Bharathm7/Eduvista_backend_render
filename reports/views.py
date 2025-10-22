@@ -31,7 +31,13 @@ def students_list(request):
 # --- TEACHERS ------------------------------------------------------
 @csrf_exempt
 def teachers_list(request):
-    response = supabase.table("Teacher").select("*").execute()
+    response = supabase.table("Teacher").select("*").order("teacher_id").execute()
+    return JsonResponse(response.data, safe=False)
+
+# --- SUBJECTS ------------------------------------------------------
+@csrf_exempt
+def subjects(request):
+    response = supabase.table("subject_details").select("*").order("subject_id").execute()
     return JsonResponse(response.data, safe=False)
 
 # --- EXAMS ------------------------------------------------------
