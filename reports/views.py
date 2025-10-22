@@ -24,8 +24,8 @@ supabase = create_client(SUPABASE_URL,SUPABASE_KEY)
 
 # --- STUDENTS ------------------------------------------------------
 @csrf_exempt
-def students_list(request):
-    response = supabase.table("student_details").select("*").execute()
+def students_list(request, class_id):
+    response = supabase.table("student_details").select("*").eq("class_id", class_id).order("student_id").execute()
     return JsonResponse(response.data, safe=False)
 
 # --- TEACHERS ------------------------------------------------------
@@ -38,6 +38,17 @@ def teachers_list(request):
 @csrf_exempt
 def subjects(request):
     response = supabase.table("subject_details").select("*").order("subject_id").execute()
+    return JsonResponse(response.data, safe=False)
+
+def subjectsClassWise(request, class_id):
+    response = supabase.table("Teacher_subject_class").select("*").eq("class_id", class_id).execute()
+    subject_ids = [row["subject_id"] for row in response.data]
+    subjects = supabase.table("subject_details").select("*").in_("subject_id", subject_ids).execute()
+    return JsonResponse(subjects.data, safe=False)
+
+@csrf_exempt
+def classesAdmin(request):
+    response = supabase.table("class_details").select("*").order("class_id").execute()
     return JsonResponse(response.data, safe=False)
 
 # --- EXAMS ------------------------------------------------------
