@@ -886,3 +886,114 @@ def logout_api(request):
     return Response({"message": "Logged out successfully"})
 
 
+# --- STUDENT FINANCIALS ------------------------------------------------------
+
+@api_view(["GET"])
+@csrf_exempt
+def student_payment_history(request, student_id):
+    """
+    API endpoint to get all payment history (receipts) for a specific student.
+    """
+    try:
+        response = supabase.table("payment_details") \
+            .select("receipt_number, payment_date, amount, payment_method, due_id") \
+            .eq("student_id", student_id) \
+            .order("payment_date", desc=True) \
+            .execute()
+
+        if not response.data:
+            return Response({"message": "No payment history found for this student."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(response.data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error fetching payment history for student {student_id}: {e}")
+        return Response({"error": "An internal server error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@csrf_exempt
+def student_upcoming_dues(request, student_id):
+    """
+    API endpoint to get all unpaid or partially paid dues for a specific student.
+    """
+    try:
+        response = supabase.table("due_fee_details") \
+            .select("description, total_amount, amount_paid, status, due_date") \
+            .eq("student_id", student_id) \
+            .neq("status", "Paid") \
+            .order("due_date", desc=False) \
+            .execute()
+
+        if not response.data:
+            return Response({"message": "No upcoming dues found for this student."}, status=status.HTTP_404_NOT_FOUND)
+
+        dues_with_balance = []
+        for due in response.data:
+            due['balance_due'] = due['total_amount'] - due['amount_paid']
+            dues_with_balance.append(due)
+
+        return Response(dues_with_balance, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error fetching upcoming dues for student {student_id}: {e}")
+        return Response({"error": "An internal server error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# --- STUDENT TRANSPORT ------------------------------------------------------
+
+@api_view(["GET"])
+@csrf_exempt
+def student_transport_details(request, student_id):
+    """
+    API endpoint to get all transport details for a specific student,
+    including stop, route, vehicle, and driver information.
+    """
+    try:
+        student_response = supabase.table("student_details") \
+            .select("transport_stop_id") \
+            .eq("student_id", student_id) \
+            .maybe_single() \
+            .execute()
+
+        if not student_response.data or student_response.data.get("transport_stop_id") is None:
+            return Response({"message": "This student is not enrolled in transport services."}, status=status.HTTP_404_NOT_FOUND)
+
+        stop_id = student_response.data["transport_stop_id"]
+
+        stop_response = supabase.table("stops_details") \
+            .select("stop_name, stop_fee, vehicle_id") \
+            .eq("stop_id", stop_id) \
+            .single() \
+            .execute()
+
+        if not stop_response.data:
+            return Response({"error": "Could not find details for the assigned transport stop."}, status=status.HTTP_404_NOT_FOUND)
+
+        stop_info = stop_response.data
+        vehicle_id = stop_info["vehicle_id"]
+
+        vehicle_response = supabase.table("vehicle_details") \
+            .select("route_name, vehicle_number, driver_name, driver_contact") \
+            .eq("vehicle_id", vehicle_id) \
+            .single() \
+            .execute()
+
+        if not vehicle_response.data:
+            return Response({"error": "Could not find vehicle details for the assigned route."}, status=status.HTTP_404_NOT_FOUND)
+
+        vehicle_info = vehicle_response.data
+        full_transport_details = {
+            "stop_name": stop_info["stop_name"],
+            "transport_fee": stop_info["stop_fee"],
+            "route_name": vehicle_info["route_name"],
+            "bus_number": vehicle_info["vehicle_number"],
+            "driver_name": vehicle_info["driver_name"],
+            "driver_contact": vehicle_info["driver_contact"]
+        }
+
+        return Response(full_transport_details, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error fetching transport details for student {student_id}: {e}")
+        return Response({"error": "An internal server error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
