@@ -15,24 +15,17 @@ from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 import os
 from .utils import generate_attendance_pdf
 import logging
-from twilio.rest import Client
-
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL,SUPABASE_KEY)
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 
 # --- STUDENTS ------------------------------------------------------
 @csrf_exempt
-def students_list(request):
-    response = supabase.table("student_details").select("*").execute()
+def students_list(request, class_id):
+    response = supabase.table("student_details").select("*").eq("class_id", class_id).order("student_id").execute()
     return JsonResponse(response.data, safe=False)
 
 # --- TEACHERS ------------------------------------------------------
@@ -45,6 +38,17 @@ def teachers_list(request):
 @csrf_exempt
 def subjects(request):
     response = supabase.table("subject_details").select("*").order("subject_id").execute()
+    return JsonResponse(response.data, safe=False)
+
+def subjectsClassWise(request, class_id):
+    response = supabase.table("Teacher_subject_class").select("*").eq("class_id", class_id).execute()
+    subject_ids = [row["subject_id"] for row in response.data]
+    subjects = supabase.table("subject_details").select("*").in_("subject_id", subject_ids).execute()
+    return JsonResponse(subjects.data, safe=False)
+
+@csrf_exempt
+def classesAdmin(request):
+    response = supabase.table("class_details").select("*").order("class_id").execute()
     return JsonResponse(response.data, safe=False)
 
 # --- EXAMS ------------------------------------------------------
@@ -526,68 +530,68 @@ def final_reports(request, student_id):
     return JsonResponse(analytics, safe=False)
 
 
-# def gen_pdf(request, student_id):
-#     """
-#     Generates a student's report card PDF, uploads it to Supabase Storage,
-#     saves metadata in report_card_files table, and returns a public preview URL.
-#     """
+def gen_pdf(request, student_id):
+    """
+    Generates a student's report card PDF, uploads it to Supabase Storage,
+    saves metadata in report_card_files table, and returns a public preview URL.
+    """
 
-#     # --- Step 1: Fetch analytics and attendance ---
-#     analytics = get_student_analytics(student_id)
-#     if analytics is None or not analytics.get("subjects"):
-#         return HttpResponse("Student not found or no data", status=404)
+    # --- Step 1: Fetch analytics and attendance ---
+    analytics = get_student_analytics(student_id)
+    if analytics is None or not analytics.get("subjects"):
+        return HttpResponse("Student not found or no data", status=404)
 
-#     attendance_records = get_attendance_records_for_student(student_id)
-#     if attendance_records is None:
-#         return HttpResponse("Attendance records not found", status=404)
+    attendance_records = get_attendance_records_for_student(student_id)
+    if attendance_records is None:
+        return HttpResponse("Attendance records not found", status=404)
 
-#     # --- Step 2: Generate PDF in memory ---
-#     pdf_buffer = generate_report_card(
-#         student_name=analytics["student_name"],
-#         subjects_data=analytics["subjects"],
-#         strengths=analytics["strengths"],
-#         weaknesses=analytics["weaknesses"],
-#         attendance_records=attendance_records
-#     )
+    # --- Step 2: Generate PDF in memory ---
+    pdf_buffer = generate_report_card(
+        student_name=analytics["student_name"],
+        subjects_data=analytics["subjects"],
+        strengths=analytics["strengths"],
+        weaknesses=analytics["weaknesses"],
+        attendance_records=attendance_records
+    )
 
-#     # --- Step 3: Prepare PDF file for upload ---
-#     file_bytes = pdf_buffer.getvalue()
-#     file_name = f"report_card_{student_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-#     storage_path = f"report_cards/{file_name}"
+    # --- Step 3: Prepare PDF file for upload ---
+    file_bytes = pdf_buffer.getvalue()
+    file_name = f"report_card_{student_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    storage_path = f"report_cards/{file_name}"
 
-#     # --- Step 4: Upload PDF to Supabase Storage ---
-#     try:
-#         upload_response = supabase.storage.from_("report_cards").upload(
-#             storage_path,
-#             file_bytes,
-#             {"content-type": "application/pdf"}
-#         )
-#     except Exception as e:
-#         return JsonResponse({"error": f"Failed to upload PDF: {str(e)}"}, status=500)
+    # --- Step 4: Upload PDF to Supabase Storage ---
+    try:
+        upload_response = supabase.storage.from_("report_cards").upload(
+            storage_path,
+            file_bytes,
+            {"content-type": "application/pdf"}
+        )
+    except Exception as e:
+        return JsonResponse({"error": f"Failed to upload PDF: {str(e)}"}, status=500)
 
-#     # --- Step 5: Get public preview URL ---
-#     public_url = supabase.storage.from_("report_cards").get_public_url(storage_path)
+    # --- Step 5: Get public preview URL ---
+    public_url = supabase.storage.from_("report_cards").get_public_url(storage_path)
 
-#     # --- Step 6: Save metadata in report_card_files table ---
-#     teacher_id = "T001"
+    # --- Step 6: Save metadata in report_card_files table ---
+    teacher_id = "T001"
 
-#     try:
-#         supabase.table("report_card_files").insert({
-#             "student_id": student_id,
-#             "teacher_id": teacher_id,
-#             "file_path": storage_path,
-#             "file_url": public_url,
-#             "created_at": datetime.now().isoformat()
-#         }).execute()
-#     except Exception as e:
-#         return JsonResponse({"error": f"Failed to save file metadata: {str(e)}"}, status=500)
+    try:
+        supabase.table("report_card_files").insert({
+            "student_id": student_id,
+            "teacher_id": teacher_id,
+            "file_path": storage_path,
+            "file_url": public_url,
+            "created_at": datetime.now().isoformat()
+        }).execute()
+    except Exception as e:
+        return JsonResponse({"error": f"Failed to save file metadata: {str(e)}"}, status=500)
 
-#     # --- Step 7: Return success response ---
-#     return JsonResponse({
-#         "message": "Report card generated, uploaded to Supabase successfully",
-#         "student_name": analytics["student_name"],
-#         "preview_url": public_url
-#     })
+    # --- Step 7: Return success response ---
+    return JsonResponse({
+        "message": "Report card generated, uploaded to Supabase successfully",
+        "student_name": analytics["student_name"],
+        "preview_url": public_url
+    })
 
 
 def behavioural_analysis(request, student_id):

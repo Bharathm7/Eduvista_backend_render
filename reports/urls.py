@@ -2,9 +2,11 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("students/", views.students_list),
+    path("students/<int:class_id>", views.students_list),
     path("teachers/", views.teachers_list),
     path("subjectsAdmin/", views.subjects),
+    path("subjectsClassWise/<int:class_id>", views.subjectsClassWise),
+    path("classesAdmin/", views.classesAdmin),
     path("exams/", views.exams_list),
     path("marks/<str:subject_id>/<int:class_id>/<str:exam_type>", views.marks_list),
     path("grades/<str:teacher_id>/<str:subject_id>/<int:class_id>/<str:exam_type>", views.grades_list),
@@ -24,8 +26,6 @@ urlpatterns = [
     path("student_update",views.update_students),
     path("parent_update",views.update_teacher),
     path("update_exam",views.exam_management),
-    path("parent/login/", views.parent_login_api, name="parent_login"),
-    path("parent/dashboard/<str:parent_id>/", views.parent_dashboard_api, name="parent_dashboard"),
     path('student/<int:student_id>/payment-history/', views.student_payment_history, name='student_payment_history'),
     path('student/<int:student_id>/upcoming-dues/', views.student_upcoming_dues, name='student_upcoming_dues'),
     path('student/<int:student_id>/transport/', views.student_transport_details, name='student_transport_details'),
