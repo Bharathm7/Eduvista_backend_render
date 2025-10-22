@@ -26,6 +26,8 @@ urlpatterns = [
     path("student_update",views.update_students),
     path("parent_update",views.update_teacher),
     path("update_exam",views.exam_management),
+    path("parent/login/", views.parent_login_api, name="parent_login"),
+    path("parent/dashboard/<str:parent_id>/", views.parent_dashboard_api, name="parent_dashboard"),
     path('student/<int:student_id>/payment-history/', views.student_payment_history, name='student_payment_history'),
     path('student/<int:student_id>/upcoming-dues/', views.student_upcoming_dues, name='student_upcoming_dues'),
     path('student/<int:student_id>/transport/', views.student_transport_details, name='student_transport_details'),
