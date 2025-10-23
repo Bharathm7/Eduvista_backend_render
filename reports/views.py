@@ -982,7 +982,7 @@ def gen_pdf(request, student_id):
             f"Student: {student['first_name']} {student['last_name']}\n"
             f"Class: {class_info['class_name']}\n"
             f"View/Download: {public_url}\n\n"
-            f"- EduVista School"
+            f"- Aevam"
         )
 
     #  Send WhatsApp message via Twilio
